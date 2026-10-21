@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "name": "CloudShare",
+    "slug": "cloudshare",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1c1635"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cloudshare.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#281857"
+      },
+      "package": "com.cloudshare.app",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "يستخدم CloudShare الكاميرا لمسح رمز QR لربط الأجهزة ونقل الملفات بأمان."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "يتيح CloudShare اختيار الصور ومقاطع الفيديو لمشاركتها مع أجهزتك الأخرى."
+        }
+      ]
+    ],
+    "scheme": "cloudshare",
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "68e37ba8-f24a-4f6d-9438-c5a49f7d6d35"
+      }
+    }
+  }
+}
