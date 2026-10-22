@@ -52,13 +52,13 @@ export default function SendFilesScreen() {
 
   const totalBytes = selectedFiles.reduce((acc, f) => acc + (f.size || 0), 0);
 
-  const handlePairPin = () => {
+  const handlePairPin = async () => {
     if (targetPin.trim().length >= 4) {
       try {
-        engine.pairWithPin(targetPin.trim());
+        await engine.pairWithPin(targetPin.trim());
         Alert.alert('جاري الاقتران', 'تم إرسال طلب الاقتران، يرجى الموافقة على الجهاز الآخر.');
       } catch (err: any) {
-        Alert.alert('خطأ', err.message);
+        Alert.alert('خطأ في الاقتران', err.message);
       }
     }
   };

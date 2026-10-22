@@ -8,6 +8,7 @@ export interface AppPreferences {
   deviceName: string;
   autoSaveToGallery: boolean;
   savePath: string;
+  serverUrl?: string;
 }
 
 export class MobileStorageService {

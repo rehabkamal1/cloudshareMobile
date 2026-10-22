@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,26 +8,50 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
-  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Monitor, QrCode, KeyRound, CheckCircle2, ArrowRight } from 'lucide-react-native';
+import { Monitor, QrCode, KeyRound, CheckCircle2, Wifi, WifiOff, Settings2, Check } from 'lucide-react-native';
 import { MobileTransferEngine } from '../../src/services/transferEngine';
 
 export default function CompanionScreen() {
   const router = useRouter();
   const [pin, setPin] = useState('');
+  const [isConnecting, setIsConnecting] = useState(false);
   const engine = MobileTransferEngine.getInstance();
+  const [hubConnected, setHubConnected] = useState(engine.isHubConnected());
+  const [hubUrl, setHubUrlState] = useState(engine.getHubUrl());
+  const [showServerModal, setShowServerModal] = useState(false);
+  const [customIp, setCustomIp] = useState('');
   const pairedDevice = engine.getPairedDevice();
 
-  const handlePair = () => {
+  useEffect(() => {
+    const unsub = engine.onConnectionStatusChange((connected) => {
+      setHubConnected(connected);
+      setHubUrlState(engine.getHubUrl());
+    });
+    return unsub;
+  }, []);
+
+  const handlePair = async () => {
     if (pin.trim().length >= 4) {
+      setIsConnecting(true);
       try {
-        engine.pairWithPin(pin.trim());
-        Alert.alert('جاري الاتصال', 'تم إرسال طلب الربط مع متصفح الكمبيوتر.');
+        await engine.pairWithPin(pin.trim());
+        Alert.alert('جاري الاتصال', 'تم إرسال طلب الربط مع متصفح الكمبيوتر، يرجى الموافقة على شاشة اللابتوب.');
       } catch (err: any) {
-        Alert.alert('خطأ', err.message);
+        Alert.alert('تنبيه الاقتران', err.message);
+      } finally {
+        setIsConnecting(false);
       }
+    }
+  };
+
+  const handleSaveServerIp = () => {
+    if (customIp.trim()) {
+      engine.setHubUrl(customIp.trim());
+      setShowServerModal(false);
+      Alert.alert('تم حفظ العنوان', 'جاري فحص الاتصال بالعنوان الجديد...');
     }
   };
 
@@ -43,6 +67,59 @@ export default function CompanionScreen() {
             افتح متصفح الكمبيوتر وانتقل إلى موقع CloudShare لتبادل الملفات بأقصى سرعة وبدون كابل USB.
           </Text>
         </View>
+
+        {/* Hub Connection Status Card */}
+        <View style={styles.hubStatusCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+            <View
+              style={[
+                styles.statusDot,
+                { backgroundColor: hubConnected ? '#328768' : '#DC2626' },
+              ]}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.hubStatusTitle}>
+                {hubConnected ? 'خادم الإشارات متصل 🟢' : 'خادم الإشارات غير متصل 🔴'}
+              </Text>
+              <Text style={styles.hubStatusSub} numberOfLines={1}>
+                {hubUrl}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.editHubBtn}
+            onPress={() => setShowServerModal(!showServerModal)}
+          >
+            <Settings2 size={16} color="#7667C9" />
+            <Text style={styles.editHubBtnText}>
+              {showServerModal ? 'إغلاق' : 'تعديل IP'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Server IP Edit Drawer */}
+        {showServerModal && (
+          <View style={styles.serverConfigCard}>
+            <Text style={styles.serverConfigTitle}>عنوان IP اللابتوب في الشبكة:</Text>
+            <Text style={styles.serverConfigDesc}>
+              اكتب عنوان IP اللابتوب الظاهر في سطر الأوامر بعد تشغيل (npm run dev:api):
+            </Text>
+            <View style={styles.serverInputRow}>
+              <TextInput
+                placeholder="مثال: 192.168.1.15"
+                value={customIp}
+                onChangeText={setCustomIp}
+                keyboardType="numbers-and-punctuation"
+                style={styles.serverInput}
+                autoFocus
+              />
+              <TouchableOpacity style={styles.saveServerBtn} onPress={handleSaveServerIp}>
+                <Check size={18} color="#FFFFFF" />
+                <Text style={styles.saveServerBtnText}>تطبيق</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {pairedDevice ? (
           <View style={styles.successCard}>
@@ -102,11 +179,18 @@ export default function CompanionScreen() {
                   maxLength={6}
                 />
                 <TouchableOpacity
-                  style={[styles.pinSubmitBtn, { opacity: pin.trim().length >= 4 ? 1 : 0.6 }]}
+                  style={[
+                    styles.pinSubmitBtn,
+                    { opacity: pin.trim().length >= 4 && !isConnecting ? 1 : 0.6 },
+                  ]}
                   onPress={handlePair}
-                  disabled={pin.trim().length < 4}
+                  disabled={pin.trim().length < 4 || isConnecting}
                 >
-                  <Text style={styles.pinSubmitBtnText}>تأكيد الربط</Text>
+                  {isConnecting ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.pinSubmitBtnText}>تأكيد الربط</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -302,6 +386,99 @@ const styles = StyleSheet.create({
     color: '#77758B',
     lineHeight: 20,
     textAlign: 'right',
+  },
+  hubStatusCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E8E5F0',
+    marginBottom: 16,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  hubStatusTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#29283A',
+  },
+  hubStatusSub: {
+    fontSize: 11,
+    color: '#77758B',
+    marginTop: 2,
+    textAlign: 'right',
+  },
+  editHubBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#F3F0FF',
+  },
+  editHubBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#7667C9',
+  },
+  serverConfigCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#D4CEFF',
+    marginBottom: 16,
+  },
+  serverConfigTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#29283A',
+    marginBottom: 4,
+    textAlign: 'right',
+  },
+  serverConfigDesc: {
+    fontSize: 11,
+    color: '#77758B',
+    lineHeight: 16,
+    marginBottom: 10,
+    textAlign: 'right',
+  },
+  serverInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  serverInput: {
+    flex: 1,
+    backgroundColor: '#F8F7FC',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#E8E5F0',
+    fontSize: 14,
+    color: '#29283A',
+    textAlign: 'center',
+  },
+  saveServerBtn: {
+    backgroundColor: '#7667C9',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    justifyContent: 'center',
+  },
+  saveServerBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
 

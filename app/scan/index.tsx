@@ -25,14 +25,17 @@ export default function QRScannerScreen() {
     }
   }, []);
 
-  const handleBarcodeScanned = ({ data }: { data: string }) => {
+  const handleBarcodeScanned = async ({ data }: { data: string }) => {
     if (scanned) return;
     setScanned(true);
 
     try {
       const payload: QRPairingPayload = JSON.parse(data);
       if ((payload.type === 'cloudshare_pair' || payload.type === 'shareflow_pair') && payload.pin) {
-        engine.pairWithPin(payload.pin);
+        if (payload.wsUrl) {
+          engine.setHubUrl(payload.wsUrl);
+        }
+        await engine.pairWithPin(payload.pin);
         Alert.alert(
           'تم المسح بنجاح!',
           `تم التعرف على الجهاز (${payload.name}). جاري إتمام الاقتران...`,
@@ -43,8 +46,8 @@ export default function QRScannerScreen() {
           { text: 'حسناً', onPress: () => setScanned(false) },
         ]);
       }
-    } catch {
-      Alert.alert('خطأ', 'تعذر قراءة بيانات رمز الـ QR', [
+    } catch (err: any) {
+      Alert.alert('خطأ في الاقتران', err?.message || 'تعذر إتمام الاقتران بالرمز', [
         { text: 'إعادة المحاولة', onPress: () => setScanned(false) },
       ]);
     }

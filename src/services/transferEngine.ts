@@ -27,6 +27,7 @@ export class MobileTransferEngine {
 
   private progressCallback: MobileTransferCallback | null = null;
   private incomingOfferCallback: MobileIncomingOfferCallback | null = null;
+  private connectionCallbacks: ((connected: boolean) => void)[] = [];
   private activeProgress: TransferProgress | null = null;
 
   // Receiving state
@@ -49,13 +50,69 @@ export class MobileTransferEngine {
   }
 
   private constructor() {
+    this.init();
+  }
+
+  private async init() {
+    try {
+      const prefs = await MobileStorageService.getPreferences();
+      if (prefs.serverUrl) {
+        this.wsUrl = prefs.serverUrl;
+      }
+    } catch {}
     this.connect();
   }
 
+  public onConnectionStatusChange(cb: (connected: boolean) => void) {
+    this.connectionCallbacks.push(cb);
+    cb(this.isHubConnected());
+    return () => {
+      this.connectionCallbacks = this.connectionCallbacks.filter((c) => c !== cb);
+    };
+  }
+
+  private notifyConnection(connected: boolean) {
+    this.isConnected = connected;
+    this.connectionCallbacks.forEach((cb) => cb(connected));
+  }
+
+  public isHubConnected(): boolean {
+    return this.isConnected && this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  public getHubUrl(): string {
+    return this.wsUrl;
+  }
+
   public setHubUrl(url: string) {
-    this.wsUrl = url;
+    let clean = url.trim();
+    if (!clean) return;
+
+    if (!clean.startsWith('ws://') && !clean.startsWith('wss://')) {
+      if (clean.startsWith('http://')) {
+        clean = clean.replace('http://', 'ws://');
+      } else if (clean.startsWith('https://')) {
+        clean = clean.replace('https://', 'wss://');
+      } else {
+        clean = `ws://${clean}`;
+      }
+    }
+
+    if (!clean.includes(':4000') && !clean.includes('/ws/signaling')) {
+      clean = clean.replace(/\/+$/, '');
+      clean = `${clean}:4000/ws/signaling`;
+    } else if (!clean.includes('/ws/signaling')) {
+      clean = clean.replace(/\/+$/, '');
+      clean = `${clean}/ws/signaling`;
+    }
+
+    this.wsUrl = clean;
+    MobileStorageService.updatePreferences({ serverUrl: clean }).catch(() => {});
+
     if (this.ws) {
-      this.ws.close();
+      try {
+        this.ws.close();
+      } catch {}
     }
     this.connect();
   }
@@ -89,7 +146,7 @@ export class MobileTransferEngine {
       this.ws = new WebSocket(this.wsUrl);
 
       this.ws.onopen = () => {
-        this.isConnected = true;
+        this.notifyConnection(true);
         this.ws?.send(
           JSON.stringify({
             type: 'register',
@@ -113,11 +170,12 @@ export class MobileTransferEngine {
       };
 
       this.ws.onclose = () => {
-        this.isConnected = false;
+        this.notifyConnection(false);
         setTimeout(() => this.connect(), 5000);
       };
 
       this.ws.onerror = (err) => {
+        this.notifyConnection(false);
         console.warn('[Mobile Transfer] WebSocket notice (LAN hub offline or reconnecting):', err);
       };
     } catch (e) {
@@ -204,12 +262,33 @@ export class MobileTransferEngine {
     }
   }
 
-  public pairWithPin(pin: string) {
+  public async pairWithPin(pin: string): Promise<void> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      throw new Error('خادم الإشارات غير متصل حالياً، يرجى التأكد من تشغيل الشبكة');
+      if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
+        this.connect();
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const check = setInterval(() => {
+          if (this.ws?.readyState === WebSocket.OPEN) {
+            clearInterval(check);
+            clearTimeout(timeout);
+            resolve();
+          }
+        }, 150);
+
+        const timeout = setTimeout(() => {
+          clearInterval(check);
+          reject(
+            new Error(
+              `تعذر الاتصال بخادم اللابتوب (${this.wsUrl}).\n\nتأكد من:\n١. تشغيل السيرفر على اللابتوب (npm run dev:api)\n٢. اتصال الهاتف واللابتوب بنفس شبكة الواي فاي\n٣. إدخال عنوان IP اللابتوب الصحيح في الإعدادات.`
+            )
+          );
+        }, 3500);
+      });
     }
 
-    this.ws.send(
+    this.ws?.send(
       JSON.stringify({
         type: 'pair_request',
         payload: {

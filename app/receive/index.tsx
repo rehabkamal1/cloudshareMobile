@@ -25,6 +25,7 @@ export default function ReceiveFilesScreen() {
     name: details.name,
     deviceType: 'android',
     pin: details.pin,
+    wsUrl: engine.getHubUrl(),
     token: details.id,
   };
 
